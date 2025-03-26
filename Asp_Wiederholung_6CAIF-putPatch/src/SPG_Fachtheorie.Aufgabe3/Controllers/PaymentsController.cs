@@ -142,10 +142,57 @@ namespace SPG_Fachtheorie.Aufgabe3.Controllers
             return NoContent();
         }
 
-        [HttpPut("/api/paymentItems/{CashDesk}")]
-        public IActionResult UpdatePayment(int CashDesk, [FromBody] UpdatePaymentCommand cmd)
+        [HttpPut("/api/paymentItems/{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult UpdatePaymentItem(int id, [FromBody] UpdatePaymentItemCommand cmd)
         {
+            if (id != cmd.Id)
+            {
+                return Problem("Invalid payment item ID", statusCode: 400);
+            }
 
+            var item = _db.PaymentItems
+                .Include(p => p.Payment)
+                .FirstOrDefault(p => p.Id == id);
+
+            if (item == null)
+            {
+                return Problem("Payment Item not found", statusCode: 404);
+            }
+
+            // Wir überprüfen, ob die angegebene PaymentId zur aktuellen passt
+            if (item.Payment == null)
+            {
+                return Problem("Invalid payment ID", statusCode: 400);
+            }
+
+            item.ArticleName = cmd.ArticleName;
+            item.Amount = cmd.Amount;
+            item.Price = cmd.Price;
+
+            _db.SaveChanges();
+            return NoContent();
         }
+
+        [HttpPatch("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult UpdateConfirmed(int id, [FromBody] UpdateConfirmedCommand cmd)
+        {
+            var payment = _db.Payments.FirstOrDefault(p => p.Id == id);
+            if (payment == null)
+            {
+                return Problem("Payment not found", statusCode: 404);
+            }
+
+            Console.WriteLine($"Payment {id} confirmed at {cmd.Confirmed}");
+
+            return NoContent();
+        }
+
+
     }
 }
