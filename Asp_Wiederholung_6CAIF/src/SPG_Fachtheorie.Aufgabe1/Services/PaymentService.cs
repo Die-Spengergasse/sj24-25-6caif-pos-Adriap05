@@ -1,4 +1,5 @@
-﻿using SPG_Fachtheorie.Aufgabe1.Commands;
+﻿using Microsoft.EntityFrameworkCore;
+using SPG_Fachtheorie.Aufgabe1.Commands;
 using SPG_Fachtheorie.Aufgabe1.Infrastructure;
 using SPG_Fachtheorie.Aufgabe1.Model;
 using System;
@@ -18,11 +19,50 @@ namespace SPG_Fachtheorie.Aufgabe1.Services
             _db = db;
         }
 
-        public IQueryable<Employee> Payments => _db.Payments.AsQueryable();
+        public IQueryable<Payment> Payments => _db.Payments.AsQueryable();
 
         public Payment CreatePayment(NewPaymentCommand cmd)
         {
+            DateTime PaymentDateTime = DateTime.UtcNow;
+            var cashDesk = _db.CashDesks.FirstOrDefault(c => c.Number == cmd.CashDeskNumber);
+            if (cashDesk is null) throw new PaymentServiceException("Invalid CashDesk");
+            var employee = _db.Employees
+                .FirstOrDefault(e => e.RegistrationNumber == cmd.EmployeeRegistrationNumber);
+            if (employee is null) throw new PaymentServiceException("Invalid Employee");
+            // Erzeuge die Modelklasse
+            var paymentType = Enum.Parse<PaymentType>(cmd.PaymentType);
 
+            var payment = new Payment(
+                cashDesk, 
+                PaymentDateTime, 
+                employee, 
+                paymentType);
+                _db.Payments.Add(payment);
+
+            var hasOpenPayment = _db.Payments.Any(p =>
+            p.CashDesk.Number == cmd.CashDeskNumber &&
+            p.Confirmed == null);
+
+            if (hasOpenPayment)
+            {
+                throw new PaymentServiceException("Open payment for cashdesk.");
+            }
+
+            _db.Payments.Add(payment);
+            SaveOrThrow();
+            return payment;
+        }
+
+        private void SaveOrThrow()
+        {
+            try
+            {
+                _db.SaveChanges();
+            }
+            catch (DbUpdateException e)
+            {
+                throw new EmployeeServiceException(e.InnerException?.Message ?? e.Message);
+            }
         }
     }
 }
