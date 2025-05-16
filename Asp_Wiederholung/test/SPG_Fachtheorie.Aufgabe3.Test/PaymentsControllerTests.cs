@@ -17,35 +17,66 @@ namespace SPG_Fachtheorie.Aufgabe3.Test
     public class PaymentsControllerTests
     {
         [Theory]
-        [InlineData(1, HttpStatusCode.OK)] // GET /api/payments?cashDesk = 1
-        [InlineData(2, HttpStatusCode.NotFound)] 
+        [InlineData(1, null, 2)]
+        [InlineData(null, "2025-03-15", 2)]
+        [InlineData(1, "2025-03-15", 1)]
 
-        public async Task GetAllPaymentsTests(
-            int cashDeskNumber, HttpStatusCode expectedStatusCode)
+
+        public async Task GetAllPaymentsSuccessTests(
+            int? cashDesk, string? dateFromString, int count)
         {
             // ARRANGE
+            DateTime? dateFrom = dateFromString is null ?
+                null : DateTime.Parse(dateFromString);
             var factory = new TestWebApplicationFactory();
             factory.InitializeDatabase(db =>
             {
+            
+            var cashDesk1 = new CashDesk(1);
+            var cashDesk2 = new CashDesk(2);
+            var cashier = new Cashier(
+                2, "FN", "LN", new DateOnly(2004, 2, 1),
+                3000M, null, "Feinkost");
+            var payment1 = new Payment(cashDesk1, new DateTime(2025, 05, 05),
+                cashier, PaymentType.Cash);
+            var payment2 = new Payment(cashDesk1, new DateTime(2025, 06, 05),
+                cashier, PaymentType.Cash);
+            var payment3 = new Payment(cashDesk2, new DateTime(2025, 07, 05),
+                cashier, PaymentType.Cash);
+            var payment4 = new Payment(cashDesk2, new DateTime(2025, 08, 05),
+                cashier, PaymentType.Cash);
+
+                db.AddRange(payment1, payment2, payment3, payment4);
+                db.SaveChanges();
             });
-            var cashDesk = new CashDesk(1);
-                var cashier = new Cashier(
-                    2, "FN", "LN", new DateOnly(2004, 2, 1),
-                    3000M, null, "Feinkost");
-                var payment = new Payment(cashDesk, new DateTime(2025, 05, 05), 
-                    cashier, PaymentType.Cash);
-                //db.AddRange(payment);
-                //db.SaveChanges();
-           
 
-            // ACT
-            var (statusCode, content) = await factory.GetHttpContent<List<PaymentDto>>($"/api/payments/{cashDeskNumber}");
+            // ACT & ASSERT
+            if (cashDesk is not null && dateFrom is not null)
+            {
+                var (statusCode, payments) = await factory.GetHttpContent<List<PaymentDto>>($"/api/payments?dateFrom=2025-05-13&cashDesk=1");
+                Assert.True(statusCode == System.Net.HttpStatusCode.OK);
+                Assert.NotNull(payments);
+                Assert.True(payments.Count == count);
+                Assert.True(payments.All(p => p.PaymentDateTime >= dateFrom && p.CashDeskNumber == cashDesk));
+            } 
 
-            // ASSERT
-            Assert.True(statusCode == expectedStatusCode);
-            Assert.NotNull(content);
-            Assert.True(content.First().CashDeskNumber == cashDeskNumber);
+            else if (cashDesk is not null && dateFrom is null)
+            {
+                var (statusCode, payments) = await factory.GetHttpContent<List<PaymentDto>>($"/api/payments?cashDesk=1");
+                Assert.True(statusCode == System.Net.HttpStatusCode.OK);
+                Assert.NotNull(payments);
+                Assert.True(payments.Count == count);
+                Assert.True(payments.All(p => p.CashDeskNumber == cashDesk));
+            }
 
+            else if (cashDesk is null && dateFrom is not null)
+            {
+                var (statusCode, payments) = await factory.GetHttpContent<List<PaymentDto>>($"/api/payments?dateFrom=2025-05-13");
+                Assert.True(statusCode == System.Net.HttpStatusCode.OK);
+                Assert.NotNull(payments);
+                Assert.True(payments.Count == count);
+                Assert.True(payments.All(p => p.PaymentDateTime >= dateFrom));
+            }
         }
     }
 }
